@@ -742,6 +742,99 @@ def compute_penetration_depths(
     return d_ti, d_p1, d_p2
 
 
+def compute_te_tm_mixing_ratio(
+    freq_thz: np.ndarray,
+    neff: np.ndarray,
+    case: str,
+    gamma: float,
+    kappa: float,
+    eps2_fn_omega=None,
+    eps_d_fn_omega=None,
+) -> np.ndarray:
+    omega = 2 * np.pi * (freq_thz * 1e12)
+    eta = np.full(freq_thz.shape, np.nan, dtype=float)
+
+    for i, om in enumerate(omega):
+        ne = neff[i]
+        if not (np.isfinite(ne.real) and np.isfinite(ne.imag)):
+            continue
+
+        k0 = om / c
+        beta = k0 * ne
+        if abs(beta) == 0:
+            continue
+
+        eps_o, eps_e = eps_o_e(om, gamma, eps_d_fn_omega=eps_d_fn_omega)
+        eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(om)
+
+        if not (
+            np.isfinite(eps_o.real)
+            and np.isfinite(eps_o.imag)
+            and np.isfinite(eps_e.real)
+            and np.isfinite(eps_e.imag)
+            and np.isfinite(eps2_loc.real)
+            and np.isfinite(eps2_loc.imag)
+        ):
+            continue
+
+        q = k0 * csqrt_decay(ne**2 - eps2_loc)
+        if case == "ty":
+            p1 = k0 * csqrt_decay(ne**2 - eps_e)
+            p2 = k0 * csqrt_decay(ne**2 - eps_o)
+        elif case == "n":
+            p1 = k0 * csqrt_decay(ne**2 - eps_o)
+            p2 = k0 * csqrt_decay((eps_o / eps_e) * (ne**2 - eps_e))
+        else:
+            raise ValueError("case must be 'ty' or 'n'")
+
+        if np.real(q) <= 0 or np.real(p1) <= 0 or np.real(p2) <= 0:
+            continue
+
+        te_over_tm = -kappa * p2 / (eps_o * (q + p1))
+
+        i_te = (1.0 / (2.0 * np.real(q))) + (1.0 / (2.0 * np.real(p1)))
+
+        tm_ti = (1.0 + abs(q / beta) ** 2) / (2.0 * np.real(q))
+        tm_hm = (1.0 + abs(p2 / beta) ** 2) / (2.0 * np.real(p2))
+        i_tm = tm_ti + tm_hm
+
+        if i_tm <= 0 or not np.isfinite(i_tm):
+            continue
+
+        eta_val = abs(te_over_tm) ** 2 * i_te / i_tm
+        if np.isfinite(eta_val):
+            eta[i] = float(np.real(eta_val))
+
+    return eta
+
+
+def plot_fig_te_tm_mixing(
+    freq7: np.ndarray,
+    eta7: np.ndarray,
+    freq8: np.ndarray,
+    eta8: np.ndarray,
+    fname: str = "fig11.pdf",
+):
+    fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
+
+    axs[0].plot(freq7, eta7, "k-", linewidth=3.0)
+    axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
+    style_ax(axs[0], xlabel="THz", ylabel=r"$\eta(\nu)$")
+    axs[0].set_yscale("log")
+    axs[0].set_xlim(float(freq7[0]), float(freq7[-1]))
+
+    axs[1].plot(freq8, eta8, "k-", linewidth=3.0)
+    axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
+    style_ax(axs[1], xlabel="THz", ylabel=None)
+    axs[1].set_yscale("log")
+    axs[1].set_xlim(float(freq8[0]), float(freq8[-1]))
+
+    plt.tight_layout()
+    plt.savefig(fname, bbox_inches="tight")
+    plt.close()
+    print("Saved:", fname)
+
+
 def plot_fig10(
     freq7: np.ndarray,
     neff7: np.ndarray,
@@ -961,6 +1054,32 @@ def main():
         xlim_right=(freq8[0], freq8[-1]),
         title_left=r"Attenuation length ($\mathbf{l}=\mathbf{t}_y$)",
         title_right=r"Attenuation length ($\mathbf{l}=\mathbf{n}$)",
+    )
+
+    eta7 = compute_te_tm_mixing_ratio(
+        freq7,
+        neff7,
+        case="ty",
+        gamma=gamma_lossy,
+        kappa=kappa,
+        eps2_fn_omega=eps2_of_omega,
+        eps_d_fn_omega=epsd_of_omega,
+    )
+    eta8 = compute_te_tm_mixing_ratio(
+        freq8,
+        neff8,
+        case="n",
+        gamma=gamma_lossy,
+        kappa=kappa,
+        eps2_fn_omega=eps2_of_omega,
+        eps_d_fn_omega=epsd_of_omega,
+    )
+    plot_fig_te_tm_mixing(
+        freq7=freq7,
+        eta7=eta7,
+        freq8=freq8,
+        eta8=eta8,
+        fname="fig11.pdf",
     )
 
     plot_fig10(
