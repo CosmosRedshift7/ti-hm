@@ -1,10 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import scienceplots
+import scienceplots  # noqa: F401
 
 from scipy.optimize import root, root_scalar
 from scipy.interpolate import interp1d
-from icecream import ic
 from typing import Tuple, Dict, Callable, Optional
 
 EV2RADS = 1.519267447e15  # rad/s per eV
@@ -41,9 +40,6 @@ fig_one_panel = (7.0, 4.2)
 fig_two_panel = (7.0, 7.5)
 fig_three_panel = (7.0, 10.5)
 
-# =============================
-# Global constants
-# =============================
 hm_metal = "Ti"
 hm_dielectric = "eps_vs_freq_si.csv"
 ti_material = "eps_vs_freq_bi2se3.csv"
@@ -51,27 +47,16 @@ ti_material = "eps_vs_freq_bi2se3.csv"
 c = 299_792_458.0
 alpha_fs = 1 / 137.035999084
 
-# EMT and Drude parameters (from manuscript)
 eps_d = 4.6
-# eps_d = 3.4**2
-# eps_d = 2.1
 f_m = 0.4
-
-# eps_inf = 5.0
-# omega_p = 1.38e16  # rad/s
-# gamma_lossy = 5.07e13
 
 eps_inf, omega_p, gamma_lossy = set_metal_rakic(hm_metal)
 
-# TI permittivity (kept real like manuscript) for lossless figs (2–6)
 eps2 = 2.25 + 0j
 
 fmin = 1e-3  # THz (avoid omega=0 singularity)
 
 
-# =============================
-# Generic eps(freq_thz) -> eps(omega) interpolator (complex)
-# =============================
 def load_eps_interpolator(
     csv_path: str,
     kind: str = "linear",
@@ -93,7 +78,6 @@ def load_eps_interpolator(
     er = np.asarray(data["eps_real"], dtype=float)
     ei = np.asarray(data["eps_imag"], dtype=float)
 
-    # sort just in case
     idx = np.argsort(f)
     f, er, ei = f[idx], er[idx], ei[idx]
 
@@ -115,14 +99,7 @@ def load_eps_interpolator(
     return eps_of_freq, eps_of_omega
 
 
-# =============================
-# Material model (parametrized by gamma)
-# =============================
 def eps_metal(omega: float, gamma: float) -> complex:
-    return eps_inf - (omega_p**2) / (omega**2 + 1j * gamma * omega)
-
-
-def eps_metal_rakic(omega: float, gamma: float) -> complex:
     return eps_inf - (omega_p**2) / (omega**2 + 1j * gamma * omega)
 
 
@@ -131,10 +108,8 @@ def eps_o_e(
     gamma: float,
     eps_d_fn_omega: Optional[Callable[[np.ndarray], np.ndarray]] = None,
 ) -> tuple[complex, complex]:
-    # em = eps_metal(omega, gamma)
-    em = eps_metal_rakic(omega, gamma)
+    em = eps_metal(omega, gamma)
 
-    # allow eps_d to be frequency-dependent via interpolator
     if eps_d_fn_omega is None:
         eps_d_loc = eps_d
     else:
@@ -147,9 +122,6 @@ def eps_o_e(
     return eps_o, eps_e
 
 
-# =============================
-# Helpers (plot styling)
-# =============================
 def style_ax(ax, xlabel="THz", ylabel=None, xlim=None, ylim=None):
     ax.set_xlabel(xlabel, fontsize=18)
     if ylabel is not None:
@@ -161,9 +133,6 @@ def style_ax(ax, xlabel="THz", ylabel=None, xlim=None, ylim=None):
         ax.set_ylim(*ylim)
 
 
-# =============================
-# Dissipative (complex neff): Fig7–Fig8
-# =============================
 def csqrt_decay(z: complex) -> complex:
     """
     Choose sqrt branch consistent with decay away from interface:
@@ -199,7 +168,6 @@ def F_disp_complex(
 
     eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(omega)
 
-    # If interpolation returns NaN (out of range), fail gracefully
     if not np.isfinite(eps2_loc.real) or not np.isfinite(eps2_loc.imag):
         return np.nan + 1j * np.nan
 
@@ -256,7 +224,6 @@ def solve_curve_complex(
         x0 = np.array([neff_guess.real, neff_guess.imag], dtype=float)
         sol = root(fun_xy, x0, method="hybr", tol=1e-12)
 
-        # small rescue if needed
         if not sol.success:
             ok = False
             for k in range(12):
@@ -271,7 +238,6 @@ def solve_curve_complex(
 
         ne = sol.x[0] + 1j * sol.x[1]
 
-        # enforce attenuation along +z: Im(beta)>0 <=> Im(neff)>0
         if ne.imag < 0:
             ne = ne.real - 1j * ne.imag
 
@@ -282,11 +248,9 @@ def solve_curve_complex(
 
 
 def plot_fig_reim(freq_thz, neff, fname, xlim=None, ylim=None, title=None):
-    # keep full x; break lines at NaNs
     y_re = neff.real.copy()
     y_im = neff.imag.copy()
 
-    # optional: also break if values are non-finite (covers inf too)
     y_re[~np.isfinite(y_re)] = np.nan
     y_im[~np.isfinite(y_im)] = np.nan
 
@@ -325,10 +289,6 @@ def plot_fig_reim(freq_thz, neff, fname, xlim=None, ylim=None, title=None):
     print("Saved:", fname)
 
 
-# =============================
-# Lossless (real neff): Fig2–Fig6
-# (unchanged; still uses constant eps2)
-# =============================
 def F_pq_real(
     neff: float, omega: float, kappa: float, case: str, gamma: float
 ) -> float:
@@ -467,18 +427,17 @@ def plot_fig3(gamma: float):
     omega = 2 * np.pi * (freq * 1e12)
 
     neff = np.full_like(freq, np.nan, dtype=float)
-    guess = np.sqrt(np.real(eps2)) + 1e-3  # continuation seed
+    guess = np.sqrt(np.real(eps2)) + 1e-3
 
     for i, om in enumerate(omega):
         k0 = om / c
         eps_o, _ = eps_o_e(om, gamma)
 
-        # For kappa = 0 branch: q/eps2 + p2/eps_o = 0
         def G(x: float) -> float:
             q = k0 * csqrt_pos(x**2 - eps2)
             p2 = k0 * csqrt_pos(x**2 - eps_o)
             val = q / eps2 + p2 / eps_o
-            return float(np.real(val))  # should be real on this branch
+            return float(np.real(val))
 
         low = np.sqrt(np.real(eps2)) + 1e-6
         high = 40.0
@@ -783,6 +742,99 @@ def compute_penetration_depths(
     return d_ti, d_p1, d_p2
 
 
+def compute_te_tm_mixing_ratio(
+    freq_thz: np.ndarray,
+    neff: np.ndarray,
+    case: str,
+    gamma: float,
+    kappa: float,
+    eps2_fn_omega=None,
+    eps_d_fn_omega=None,
+) -> np.ndarray:
+    omega = 2 * np.pi * (freq_thz * 1e12)
+    eta = np.full(freq_thz.shape, np.nan, dtype=float)
+
+    for i, om in enumerate(omega):
+        ne = neff[i]
+        if not (np.isfinite(ne.real) and np.isfinite(ne.imag)):
+            continue
+
+        k0 = om / c
+        beta = k0 * ne
+        if abs(beta) == 0:
+            continue
+
+        eps_o, eps_e = eps_o_e(om, gamma, eps_d_fn_omega=eps_d_fn_omega)
+        eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(om)
+
+        if not (
+            np.isfinite(eps_o.real)
+            and np.isfinite(eps_o.imag)
+            and np.isfinite(eps_e.real)
+            and np.isfinite(eps_e.imag)
+            and np.isfinite(eps2_loc.real)
+            and np.isfinite(eps2_loc.imag)
+        ):
+            continue
+
+        q = k0 * csqrt_decay(ne**2 - eps2_loc)
+        if case == "ty":
+            p1 = k0 * csqrt_decay(ne**2 - eps_e)
+            p2 = k0 * csqrt_decay(ne**2 - eps_o)
+        elif case == "n":
+            p1 = k0 * csqrt_decay(ne**2 - eps_o)
+            p2 = k0 * csqrt_decay((eps_o / eps_e) * (ne**2 - eps_e))
+        else:
+            raise ValueError("case must be 'ty' or 'n'")
+
+        if np.real(q) <= 0 or np.real(p1) <= 0 or np.real(p2) <= 0:
+            continue
+
+        te_over_tm = -kappa * p2 / (eps_o * (q + p1))
+
+        i_te = (1.0 / (2.0 * np.real(q))) + (1.0 / (2.0 * np.real(p1)))
+
+        tm_ti = (1.0 + abs(q / beta) ** 2) / (2.0 * np.real(q))
+        tm_hm = (1.0 + abs(p2 / beta) ** 2) / (2.0 * np.real(p2))
+        i_tm = tm_ti + tm_hm
+
+        if i_tm <= 0 or not np.isfinite(i_tm):
+            continue
+
+        eta_val = abs(te_over_tm) ** 2 * i_te / i_tm
+        if np.isfinite(eta_val):
+            eta[i] = float(np.real(eta_val))
+
+    return eta
+
+
+def plot_fig_te_tm_mixing(
+    freq7: np.ndarray,
+    eta7: np.ndarray,
+    freq8: np.ndarray,
+    eta8: np.ndarray,
+    fname: str = "fig11.pdf",
+):
+    fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
+
+    axs[0].plot(freq7, eta7, "k-", linewidth=3.0)
+    axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
+    style_ax(axs[0], xlabel="THz", ylabel=r"$\eta(\nu)$")
+    axs[0].set_yscale("log")
+    axs[0].set_xlim(float(freq7[0]), float(freq7[-1]))
+
+    axs[1].plot(freq8, eta8, "k-", linewidth=3.0)
+    axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
+    style_ax(axs[1], xlabel="THz", ylabel=None)
+    axs[1].set_yscale("log")
+    axs[1].set_xlim(float(freq8[0]), float(freq8[-1]))
+
+    plt.tight_layout()
+    plt.savefig(fname, bbox_inches="tight")
+    plt.close()
+    print("Saved:", fname)
+
+
 def plot_fig10(
     freq7: np.ndarray,
     neff7: np.ndarray,
@@ -803,9 +855,6 @@ def plot_fig10(
       row 2 -> p1
       row 3 -> p2
     """
-    # -----------------------------
-    # depths + decay constants
-    # -----------------------------
     (dti7, dp17, dp27, q7, p17, p27) = compute_penetration_depths(
         freq7,
         neff7,
@@ -856,13 +905,11 @@ def plot_fig10(
         return y
 
     def _plot_depth(ax, freq, depth_nm, title):
-        # explicitly black and thicker (to avoid style reuse confusion)
         ax.plot(freq, _clean_float(depth_nm), color="k", linewidth=3.0, label="depth")
         ax.set_title(title, fontsize=14)
         ax.legend(loc="upper left", frameon=True, fontsize=10)
 
     def _plot_decay(ax, freq, decay_arr, symbol_label):
-        # use explicit non-black colors so they differ from depth
         ax.plot(
             freq,
             _clean_real(decay_arr),
@@ -882,7 +929,6 @@ def plot_fig10(
         ax.tick_params(labelsize=10)
         ax.legend(loc="upper right", frameon=True, fontsize=9)
 
-    # --- Row 1: q ---
     _plot_depth(
         axs[0, 0], freq7, dti7, r"$\mathbf{l}=\mathbf{t}_y$: $\delta_{\rm TI}=1/\Re(q)$"
     )
@@ -893,7 +939,6 @@ def plot_fig10(
     )
     _plot_decay(axr[0, 1], freq8, q8, "q")
 
-    # --- Row 2: p1 ---
     _plot_depth(
         axs[1, 0], freq7, dp17, r"$\mathbf{l}=\mathbf{t}_y$: $\delta_{1}=1/\Re(p_1)$"
     )
@@ -904,7 +949,6 @@ def plot_fig10(
     )
     _plot_decay(axr[1, 1], freq8, p18, "p_1")
 
-    # --- Row 3: p2 ---
     _plot_depth(
         axs[2, 0], freq7, dp27, r"$\mathbf{l}=\mathbf{t}_y$: $\delta_{2}=1/\Re(p_2)$"
     )
@@ -915,12 +959,10 @@ def plot_fig10(
     )
     _plot_decay(axr[2, 1], freq8, p28, "p_2")
 
-    # labels + formatting
     for r in range(3):
         for c in range(2):
             style_ax(axs[r, c], xlabel="THz", ylabel="depth (nm)")
 
-    # force identical freq ranges within each column
     xlim_left = (float(freq7[0]), float(freq7[-1]))
     xlim_right = (float(freq8[0]), float(freq8[-1]))
     for r in range(3):
@@ -935,23 +977,14 @@ def plot_fig10(
     print("Saved:", fname)
 
 
-# =============================
-# Main: generate all figures
-# =============================
 def main():
-    # --------- fig1 is your schematic (not generated here) ---------
-
-    # --------- Lossless (fig2–fig6) ---------
     gamma_lossless = 0.0
-    plot_fig2(gamma_lossless)  # fig2.pdf
-    plot_fig3(gamma_lossless)  # fig3.pdf
-    plot_fig4(gamma_lossless)  # fig4.pdf
-    plot_fig5(gamma_lossless)  # fig5.pdf
-    plot_fig6(gamma_lossless)  # fig6.pdf
+    plot_fig2(gamma_lossless)
+    plot_fig3(gamma_lossless)
+    plot_fig4(gamma_lossless)
+    plot_fig5(gamma_lossless)
+    plot_fig6(gamma_lossless)
 
-    # --------- Dissipative (fig7–fig8) ---------
-    #
-    # ---- TI eps2(freq) ----
     EPS2_CSV = ti_material
     _, eps2_of_omega = load_eps_interpolator(
         EPS2_CSV,
@@ -959,7 +992,6 @@ def main():
         allow_extrapolate=False,
     )
 
-    # ---- dielectric eps_d(freq) ----
     EPSD_CSV = hm_dielectric
     _, epsd_of_omega = load_eps_interpolator(
         EPSD_CSV,
@@ -967,16 +999,10 @@ def main():
         allow_extrapolate=False,
     )
 
-    # eps2_of_omega = None
-    # epsd_of_omega = None
-
-    # Manuscript convention: theta = 2n+1 (NO pi), kappa = alpha*theta
     n_theta = 100
     theta = 2 * n_theta + 1
-    kappa = alpha_fs * theta  # ~ 201/137 ≈ 1.47
+    kappa = alpha_fs * theta
 
-    # fig7
-    # freq7 = np.linspace(412.0, 488.5, 220)
     freq7 = np.linspace(100.0, 700.0, 200)
     neff7 = solve_curve_complex(
         freq7,
@@ -995,8 +1021,6 @@ def main():
         title=r"HM--TI surface wave with dissipation ($\mathbf{l}=\mathbf{t}_y$)",
     )
 
-    # fig8
-    # freq8 = np.linspace(50.0, 650.0, 320)
     freq8 = np.linspace(100.0, 700.0, 200)
     neff8 = solve_curve_complex(
         freq8,
@@ -1030,6 +1054,32 @@ def main():
         xlim_right=(freq8[0], freq8[-1]),
         title_left=r"Attenuation length ($\mathbf{l}=\mathbf{t}_y$)",
         title_right=r"Attenuation length ($\mathbf{l}=\mathbf{n}$)",
+    )
+
+    eta7 = compute_te_tm_mixing_ratio(
+        freq7,
+        neff7,
+        case="ty",
+        gamma=gamma_lossy,
+        kappa=kappa,
+        eps2_fn_omega=eps2_of_omega,
+        eps_d_fn_omega=epsd_of_omega,
+    )
+    eta8 = compute_te_tm_mixing_ratio(
+        freq8,
+        neff8,
+        case="n",
+        gamma=gamma_lossy,
+        kappa=kappa,
+        eps2_fn_omega=eps2_of_omega,
+        eps_d_fn_omega=epsd_of_omega,
+    )
+    plot_fig_te_tm_mixing(
+        freq7=freq7,
+        eta7=eta7,
+        freq8=freq8,
+        eta8=eta8,
+        fname="fig11.pdf",
     )
 
     plot_fig10(
