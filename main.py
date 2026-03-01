@@ -45,6 +45,7 @@ hm_dielectric = "eps_vs_freq_si.csv"
 ti_material = "eps_vs_freq_bi2se3.csv"
 
 c = 299_792_458.0
+eps0 = 8.854_187_8128e-12
 alpha_fs = 1 / 137.035999084
 
 eps_d = 4.6
@@ -977,6 +978,176 @@ def plot_fig10(
     print("Saved:", fname)
 
 
+def compute_poynting_profile(
+    freq_thz: np.ndarray,
+    neff: np.ndarray,
+    case: str,
+    gamma: float,
+    eps2_fn_omega=None,
+    eps_d_fn_omega=None,
+    nfreq_samples: int = 3,
+    x_nm_max: float = 350.0,
+    nx_each_side: int = 220,
+):
+    """
+    Build S_z(x) profiles using a TM-like estimate:
+      S_z = 0.5 * Re(E_x H_y*)
+      E_x ≈ beta/(omega*eps0*eps) * H_y
+    with H_y decaying away from the interface via q (TI) and p2 (HM).
+
+    Returns
+      x_nm, list[(freq_thz, Sz_norm)]
+    where x_nm spans HM (x<0) and TI (x>0).
+    """
+    valid = np.where(np.isfinite(neff.real) & np.isfinite(neff.imag))[0]
+    if len(valid) == 0:
+        return np.array([]), []
+
+    if len(valid) <= nfreq_samples:
+        sample_ids = valid
+    else:
+        t = np.linspace(0, len(valid) - 1, nfreq_samples)
+        sample_ids = valid[np.round(t).astype(int)]
+
+    x_ti = np.linspace(0.0, x_nm_max * 1e-9, nx_each_side)
+    x_hm = np.linspace(-x_nm_max * 1e-9, 0.0, nx_each_side, endpoint=False)
+    x_m = np.concatenate([x_hm, x_ti])
+    x_nm = x_m * 1e9
+
+    curves = []
+    for idx in sample_ids:
+        om = 2 * np.pi * freq_thz[idx] * 1e12
+        k0 = om / c
+        beta = k0 * neff[idx]
+        eps_o, eps_e = eps_o_e(om, gamma, eps_d_fn_omega=eps_d_fn_omega)
+        eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(om)
+
+        if case == "ty":
+            p2 = k0 * csqrt_decay(neff[idx] ** 2 - eps_o)
+        elif case == "n":
+            p2 = k0 * csqrt_decay((eps_o / eps_e) * (neff[idx] ** 2 - eps_e))
+        else:
+            raise ValueError("case must be 'ty' or 'n'")
+        q = k0 * csqrt_decay(neff[idx] ** 2 - eps2_loc)
+
+        if np.real(q) <= 0 or np.real(p2) <= 0:
+            continue
+
+        hy_ti = np.exp(-q * x_ti)
+        hy_hm = np.exp(p2 * x_hm)
+
+        ex_ti = (beta / (om * eps0 * eps2_loc)) * hy_ti
+        ex_hm = (beta / (om * eps0 * eps_o)) * hy_hm
+
+        sz_ti = 0.5 * np.real(ex_ti * np.conj(hy_ti))
+        sz_hm = 0.5 * np.real(ex_hm * np.conj(hy_hm))
+        sz = np.concatenate([sz_hm, sz_ti])
+
+        if np.all(~np.isfinite(sz)):
+            continue
+        smax = np.nanmax(np.abs(sz))
+        if smax <= 0 or not np.isfinite(smax):
+            continue
+
+        curves.append((float(freq_thz[idx]), sz / smax))
+
+    return x_nm, curves
+
+
+def plot_fig12_poynting(
+    freq7: np.ndarray,
+    neff7: np.ndarray,
+    freq8: np.ndarray,
+    neff8: np.ndarray,
+    gamma_lossy: float,
+    eps2_of_omega=None,
+    epsd_of_omega=None,
+    fname: str = "fig12.pdf",
+):
+    x7, curves7 = compute_poynting_profile(
+        freq7,
+        neff7,
+        case="ty",
+        gamma=gamma_lossy,
+        eps2_fn_omega=eps2_of_omega,
+        eps_d_fn_omega=epsd_of_omega,
+    )
+    x8, curves8 = compute_poynting_profile(
+        freq8,
+        neff8,
+        case="n",
+        gamma=gamma_lossy,
+        eps2_fn_omega=eps2_of_omega,
+        eps_d_fn_omega=epsd_of_omega,
+    )
+
+    fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
+    for f_thz, sz in curves7:
+        axs[0].plot(x7, sz, linewidth=2.5, label=rf"{f_thz:.0f} THz")
+    for f_thz, sz in curves8:
+        axs[1].plot(x8, sz, linewidth=2.5, label=rf"{f_thz:.0f} THz")
+
+    axs[0].axvline(0.0, color="k", linestyle="--", linewidth=1.2)
+    axs[1].axvline(0.0, color="k", linestyle="--", linewidth=1.2)
+
+    axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
+    axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
+    style_ax(axs[0], xlabel=r"$x$ (nm)", ylabel=r"$S_z(x)/\max|S_z|$")
+    style_ax(axs[1], xlabel=r"$x$ (nm)", ylabel=None)
+    axs[0].legend(loc="best", frameon=True, fontsize=11)
+    axs[1].legend(loc="best", frameon=True, fontsize=11)
+
+    plt.tight_layout()
+    plt.savefig(fname, bbox_inches="tight")
+    plt.close()
+    print("Saved:", fname)
+
+
+def plot_fig13_group_velocity(
+    freq7: np.ndarray,
+    neff7: np.ndarray,
+    freq8: np.ndarray,
+    neff8: np.ndarray,
+    fname: str = "fig13.pdf",
+):
+    def _vg_and_ng(freq_thz, neff):
+        omega = 2 * np.pi * freq_thz * 1e12
+        beta = (omega / c) * np.real(neff)
+        dbeta_domega = np.gradient(beta, omega)
+
+        vg = np.full_like(beta, np.nan, dtype=float)
+        good = np.isfinite(dbeta_domega) & (np.abs(dbeta_domega) > 1e-30)
+        vg[good] = 1.0 / dbeta_domega[good]
+
+        ng = np.full_like(beta, np.nan, dtype=float)
+        ng[good] = c * dbeta_domega[good]
+        return vg, ng
+
+    vg7, ng7 = _vg_and_ng(freq7, neff7)
+    vg8, ng8 = _vg_and_ng(freq8, neff8)
+
+    fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
+
+    axs[0].plot(freq7, vg7 / c, "k-", linewidth=3.0, label=r"$v_g/c$")
+    axs[0].plot(freq7, ng7, "k--", linewidth=2.5, label=r"$n_g=c/v_g$")
+    axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
+    style_ax(axs[0], xlabel="THz", ylabel=r"$v_g/c$ and $n_g$")
+    axs[0].set_xlim(float(freq7[0]), float(freq7[-1]))
+    axs[0].legend(loc="best", frameon=True, fontsize=12)
+
+    axs[1].plot(freq8, vg8 / c, "k-", linewidth=3.0, label=r"$v_g/c$")
+    axs[1].plot(freq8, ng8, "k--", linewidth=2.5, label=r"$n_g=c/v_g$")
+    axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
+    style_ax(axs[1], xlabel="THz", ylabel=None)
+    axs[1].set_xlim(float(freq8[0]), float(freq8[-1]))
+    axs[1].legend(loc="best", frameon=True, fontsize=12)
+
+    plt.tight_layout()
+    plt.savefig(fname, bbox_inches="tight")
+    plt.close()
+    print("Saved:", fname)
+
+
 def main():
     gamma_lossless = 0.0
     plot_fig2(gamma_lossless)
@@ -1056,6 +1227,16 @@ def main():
         title_right=r"Attenuation length ($\mathbf{l}=\mathbf{n}$)",
     )
 
+    plot_fig10(
+        freq7=freq7,
+        neff7=neff7,
+        freq8=freq8,
+        neff8=neff8,
+        gamma_lossy=gamma_lossy,
+        eps2_of_omega=eps2_of_omega,
+        fname="fig10.pdf",
+    )
+
     eta7 = compute_te_tm_mixing_ratio(
         freq7,
         neff7,
@@ -1082,14 +1263,23 @@ def main():
         fname="fig11.pdf",
     )
 
-    plot_fig10(
+    plot_fig12_poynting(
         freq7=freq7,
         neff7=neff7,
         freq8=freq8,
         neff8=neff8,
         gamma_lossy=gamma_lossy,
         eps2_of_omega=eps2_of_omega,
-        fname="fig10.pdf",
+        epsd_of_omega=epsd_of_omega,
+        fname="fig12.pdf",
+    )
+
+    plot_fig13_group_velocity(
+        freq7=freq7,
+        neff7=neff7,
+        freq8=freq8,
+        neff8=neff8,
+        fname="fig13.pdf",
     )
 
 
