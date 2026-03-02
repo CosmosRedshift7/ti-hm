@@ -248,7 +248,7 @@ def solve_curve_complex(
     return out
 
 
-def plot_fig_reim(freq_thz, neff, fname, xlim=None, ylim=None, title=None):
+def plot_neff_reim(freq_thz, neff, fname, xlim=None, ylim=None, title=None):
     y_re = neff.real.copy()
     y_im = neff.imag.copy()
 
@@ -394,12 +394,7 @@ def solve_neff_curve_real(
     return neff
 
 
-def plot_fig2(gamma: float):
-    freq = np.linspace(fmin, 700.0, 600)
-    omega = 2 * np.pi * (freq * 1e12)
-    eps_o = np.array([np.real(eps_o_e(om, gamma)[0]) for om in omega])
-    eps_e = np.array([np.real(eps_o_e(om, gamma)[1]) for om in omega])
-
+def plot_fig2(freq: np.ndarray, eps_o: np.ndarray, eps_e: np.ndarray):
     plt.figure(figsize=fig_one_panel)
     plt.plot(freq, eps_o, "k-", linewidth=3.0, label=r"$\varepsilon_o(\nu)$")
     plt.plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
@@ -423,8 +418,7 @@ def csqrt_pos(z: complex) -> complex:
     return w
 
 
-def plot_fig3(gamma: float):
-    freq = np.linspace(fmin, 620.0, 450)
+def solve_neff_fig3(freq: np.ndarray, gamma: float) -> np.ndarray:
     omega = 2 * np.pi * (freq * 1e12)
 
     neff = np.full_like(freq, np.nan, dtype=float)
@@ -434,7 +428,7 @@ def plot_fig3(gamma: float):
         k0 = om / c
         eps_o, _ = eps_o_e(om, gamma)
 
-        def G(x: float) -> float:
+        def g_fun(x: float) -> float:
             q = k0 * csqrt_pos(x**2 - eps2)
             p2 = k0 * csqrt_pos(x**2 - eps_o)
             val = q / eps2 + p2 / eps_o
@@ -448,16 +442,16 @@ def plot_fig3(gamma: float):
         if b <= a:
             a, b = low, high
 
-        fa, fb = G(a), G(b)
+        fa, fb = g_fun(a), g_fun(b)
 
         if not (np.isfinite(fa) and np.isfinite(fb) and fa * fb < 0):
             xs = np.linspace(low, high, 800)
-            Fs = np.array([G(x) for x in xs])
-            good = np.isfinite(Fs)
-            xs, Fs = xs[good], Fs[good]
+            vals = np.array([g_fun(x) for x in xs])
+            good = np.isfinite(vals)
+            xs, vals = xs[good], vals[good]
             idx = None
             for j in range(len(xs) - 1):
-                if Fs[j] * Fs[j + 1] < 0:
+                if vals[j] * vals[j + 1] < 0:
                     idx = j
                     break
             if idx is None:
@@ -465,12 +459,21 @@ def plot_fig3(gamma: float):
             a, b = xs[idx], xs[idx + 1]
 
         sol = root_scalar(
-            G, bracket=(a, b), method="brentq", xtol=1e-12, rtol=1e-12, maxiter=300
+            g_fun,
+            bracket=(a, b),
+            method="brentq",
+            xtol=1e-12,
+            rtol=1e-12,
+            maxiter=300,
         )
         if sol.converged:
             neff[i] = sol.root
             guess = sol.root
 
+    return neff
+
+
+def plot_fig3(freq: np.ndarray, neff: np.ndarray):
     plt.figure(figsize=fig_one_panel)
     plt.plot(freq, neff**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
     style_ax(
@@ -483,21 +486,12 @@ def plot_fig3(gamma: float):
     print("Saved: fig3.pdf")
 
 
-def plot_fig4(gamma: float):
-    freq = np.linspace(fmin, 700.0, 520)
-    omega = 2 * np.pi * (freq * 1e12)
-    eps_e = np.array([np.real(eps_o_e(om, gamma)[1]) for om in omega])
-
-    kappa_a = alpha_fs * (2 * 10 + 1)
-    kappa_b = alpha_fs * (2 * 100 + 1)
-
-    neff_a = solve_neff_curve_real(
-        freq, kappa=kappa_a, case="ty", neff0=3.0, gamma=gamma
-    )
-    neff_b = solve_neff_curve_real(
-        freq, kappa=kappa_b, case="ty", neff0=3.0, gamma=gamma
-    )
-
+def plot_fig4(
+    freq: np.ndarray,
+    eps_e: np.ndarray,
+    neff_a: np.ndarray,
+    neff_b: np.ndarray,
+):
     fig, axs = plt.subplots(2, 1, figsize=fig_two_panel, sharex=True)
 
     axs[0].plot(freq, neff_a**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
@@ -522,22 +516,13 @@ def plot_fig4(gamma: float):
     print("Saved: fig4.pdf")
 
 
-def plot_fig5(gamma: float):
-    freq = np.linspace(fmin, 700.0, 520)
-    omega = 2 * np.pi * (freq * 1e12)
-    eps_e = np.array([np.real(eps_o_e(om, gamma)[1]) for om in omega])
-    eps2_line = np.real(eps2) * np.ones_like(freq)
-
-    kappa0 = 0.0
-    kappa_b = alpha_fs * (2 * 100 + 1)
-
-    neff0 = solve_neff_curve_real(
-        freq, kappa=kappa0, case="n", neff0=np.sqrt(np.real(eps2)) + 1e-3, gamma=gamma
-    )
-    neffb = solve_neff_curve_real(
-        freq, kappa=kappa_b, case="n", neff0=np.sqrt(np.real(eps2)) + 1e-3, gamma=gamma
-    )
-
+def plot_fig5(
+    freq: np.ndarray,
+    eps_e: np.ndarray,
+    eps2_line: np.ndarray,
+    neff0: np.ndarray,
+    neffb: np.ndarray,
+):
     fig, axs = plt.subplots(2, 1, figsize=fig_two_panel, sharex=True)
 
     axs[0].plot(freq, neff0**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
@@ -564,22 +549,13 @@ def plot_fig5(gamma: float):
     print("Saved: fig5.pdf")
 
 
-def plot_fig6(gamma: float):
-    freq = np.linspace(fmin, 700.0, 520)
-    omega = 2 * np.pi * (freq * 1e12)
-    eps_e = np.array([np.real(eps_o_e(om, gamma)[1]) for om in omega])
-    eps2_line = np.real(eps2) * np.ones_like(freq)
-
-    kappas = [5.0, 10.0, 20.0]
+def plot_fig6(
+    freq: np.ndarray,
+    eps_e: np.ndarray,
+    eps2_line: np.ndarray,
+    neffs: list[np.ndarray],
+):
     titles = [r"(a) $\kappa=5$", r"(b) $\kappa=10$", r"(c) $\kappa=20$"]
-
-    neffs = [
-        solve_neff_curve_real(
-            freq, kappa=k, case="n", neff0=np.sqrt(np.real(eps2)) + 1e-3, gamma=gamma
-        )
-        for k in kappas
-    ]
-
     fig, axs = plt.subplots(3, 1, figsize=fig_three_panel, sharex=True)
 
     for ax, neff, ttl in zip(axs, neffs, titles):
@@ -598,7 +574,27 @@ def plot_fig6(gamma: float):
     print("Saved: fig6.pdf")
 
 
-def plot_fig_atten_length(
+def plot_fig7(freq: np.ndarray, neff: np.ndarray):
+    plot_neff_reim(
+        freq,
+        neff,
+        fname="fig7.pdf",
+        xlim=(freq[0], freq[-1]),
+        title=r"HM--TI surface wave with dissipation ($\mathbf{l}=\mathbf{t}_y$)",
+    )
+
+
+def plot_fig8(freq: np.ndarray, neff: np.ndarray):
+    plot_neff_reim(
+        freq,
+        neff,
+        fname="fig8.pdf",
+        xlim=(freq[0], freq[-1]),
+        title=r"HM--TI surface wave with dissipation ($\mathbf{l}=\mathbf{n}$)",
+    )
+
+
+def plot_fig9(
     freq7_thz,
     neff7,
     freq8_thz,
@@ -809,7 +805,7 @@ def compute_te_tm_mixing_ratio(
     return eta
 
 
-def plot_fig_te_tm_mixing(
+def plot_fig11(
     freq7: np.ndarray,
     eta7: np.ndarray,
     freq8: np.ndarray,
@@ -1054,7 +1050,7 @@ def compute_poynting_profile(
     return x_nm, curves
 
 
-def plot_fig12_poynting(
+def plot_fig12(
     freq7: np.ndarray,
     neff7: np.ndarray,
     freq8: np.ndarray,
@@ -1103,7 +1099,7 @@ def plot_fig12_poynting(
     print("Saved:", fname)
 
 
-def plot_fig13_group_velocity(
+def plot_fig13(
     freq7: np.ndarray,
     neff7: np.ndarray,
     freq8: np.ndarray,
@@ -1150,22 +1146,74 @@ def plot_fig13_group_velocity(
 
 def main():
     gamma_lossless = 0.0
-    plot_fig2(gamma_lossless)
-    plot_fig3(gamma_lossless)
-    plot_fig4(gamma_lossless)
-    plot_fig5(gamma_lossless)
-    plot_fig6(gamma_lossless)
 
-    EPS2_CSV = ti_material
+    # Precompute data for Fig. 2
+    freq2 = np.linspace(fmin, 700.0, 600)
+    omega2 = 2 * np.pi * (freq2 * 1e12)
+    eps_o2 = np.array([np.real(eps_o_e(om, gamma_lossless)[0]) for om in omega2])
+    eps_e2 = np.array([np.real(eps_o_e(om, gamma_lossless)[1]) for om in omega2])
+
+    # Precompute data for Fig. 3
+    freq3 = np.linspace(fmin, 620.0, 450)
+    neff3 = solve_neff_fig3(freq3, gamma=gamma_lossless)
+
+    # Shared precompute for Figs. 4--6
+    freq456 = np.linspace(fmin, 700.0, 520)
+    omega456 = 2 * np.pi * (freq456 * 1e12)
+    eps_e456 = np.array([np.real(eps_o_e(om, gamma_lossless)[1]) for om in omega456])
+    eps2_line456 = np.real(eps2) * np.ones_like(freq456)
+
+    kappa_a = alpha_fs * (2 * 10 + 1)
+    kappa_b = alpha_fs * (2 * 100 + 1)
+
+    neff4_a = solve_neff_curve_real(
+        freq456,
+        kappa=kappa_a,
+        case="ty",
+        neff0=3.0,
+        gamma=gamma_lossless,
+    )
+    neff4_b = solve_neff_curve_real(
+        freq456,
+        kappa=kappa_b,
+        case="ty",
+        neff0=3.0,
+        gamma=gamma_lossless,
+    )
+
+    neff5_0 = solve_neff_curve_real(
+        freq456,
+        kappa=0.0,
+        case="n",
+        neff0=np.sqrt(np.real(eps2)) + 1e-3,
+        gamma=gamma_lossless,
+    )
+    neff5_b = solve_neff_curve_real(
+        freq456,
+        kappa=kappa_b,
+        case="n",
+        neff0=np.sqrt(np.real(eps2)) + 1e-3,
+        gamma=gamma_lossless,
+    )
+
+    neff6 = [
+        solve_neff_curve_real(
+            freq456,
+            kappa=kappa,
+            case="n",
+            neff0=np.sqrt(np.real(eps2)) + 1e-3,
+            gamma=gamma_lossless,
+        )
+        for kappa in (5.0, 10.0, 20.0)
+    ]
+
     _, eps2_of_omega = load_eps_interpolator(
-        EPS2_CSV,
+        ti_material,
         kind="linear",
         allow_extrapolate=False,
     )
-
-    EPSD_CSV = hm_dielectric
     _, epsd_of_omega = load_eps_interpolator(
-        EPSD_CSV,
+        hm_dielectric,
         kind="linear",
         allow_extrapolate=False,
     )
@@ -1174,9 +1222,9 @@ def main():
     theta = 2 * n_theta + 1
     kappa = alpha_fs * theta
 
-    freq7 = np.linspace(100.0, 700.0, 200)
+    freq78 = np.linspace(100.0, 700.0, 200)
     neff7 = solve_curve_complex(
-        freq7,
+        freq78,
         case="ty",
         neff0=1.0 + 1.0j,
         gamma=gamma_lossy,
@@ -1184,17 +1232,8 @@ def main():
         eps2_fn_omega=eps2_of_omega,
         eps_d_fn_omega=epsd_of_omega,
     )
-    plot_fig_reim(
-        freq7,
-        neff7,
-        fname="fig7.pdf",
-        xlim=(freq7[0], freq7[-1]),
-        title=r"HM--TI surface wave with dissipation ($\mathbf{l}=\mathbf{t}_y$)",
-    )
-
-    freq8 = np.linspace(100.0, 700.0, 200)
     neff8 = solve_curve_complex(
-        freq8,
+        freq78,
         case="n",
         neff0=1.0 + 1.0j,
         gamma=gamma_lossy,
@@ -1202,43 +1241,14 @@ def main():
         eps2_fn_omega=eps2_of_omega,
         eps_d_fn_omega=epsd_of_omega,
     )
-    plot_fig_reim(
-        freq8,
-        neff8,
-        fname="fig8.pdf",
-        xlim=(freq8[0], freq8[-1]),
-        title=r"HM--TI surface wave with dissipation ($\mathbf{l}=\mathbf{n}$)",
-    )
 
     good7 = np.isfinite(neff7.real) & np.isfinite(neff7.imag)
     good8 = np.isfinite(neff8.real) & np.isfinite(neff8.imag)
-    print("Converged points: fig7 =", good7.sum(), "/", len(freq7))
-    print("Converged points: fig8 =", good8.sum(), "/", len(freq8))
-
-    plot_fig_atten_length(
-        freq7_thz=freq7,
-        neff7=neff7,
-        freq8_thz=freq8,
-        neff8=neff8,
-        fname="fig9.pdf",
-        xlim_left=(freq7[0], freq7[-1]),
-        xlim_right=(freq8[0], freq8[-1]),
-        title_left=r"Attenuation length ($\mathbf{l}=\mathbf{t}_y$)",
-        title_right=r"Attenuation length ($\mathbf{l}=\mathbf{n}$)",
-    )
-
-    plot_fig10(
-        freq7=freq7,
-        neff7=neff7,
-        freq8=freq8,
-        neff8=neff8,
-        gamma_lossy=gamma_lossy,
-        eps2_of_omega=eps2_of_omega,
-        fname="fig10.pdf",
-    )
+    print("Converged points: fig7 =", good7.sum(), "/", len(freq78))
+    print("Converged points: fig8 =", good8.sum(), "/", len(freq78))
 
     eta7 = compute_te_tm_mixing_ratio(
-        freq7,
+        freq78,
         neff7,
         case="ty",
         gamma=gamma_lossy,
@@ -1247,7 +1257,7 @@ def main():
         eps_d_fn_omega=epsd_of_omega,
     )
     eta8 = compute_te_tm_mixing_ratio(
-        freq8,
+        freq78,
         neff8,
         case="n",
         gamma=gamma_lossy,
@@ -1255,32 +1265,47 @@ def main():
         eps2_fn_omega=eps2_of_omega,
         eps_d_fn_omega=epsd_of_omega,
     )
-    plot_fig_te_tm_mixing(
-        freq7=freq7,
-        eta7=eta7,
-        freq8=freq8,
-        eta8=eta8,
-        fname="fig11.pdf",
-    )
 
-    plot_fig12_poynting(
-        freq7=freq7,
+    # Plot generation kept at the end of main.
+    plot_fig2(freq2, eps_o2, eps_e2)
+    plot_fig3(freq3, neff3)
+    plot_fig4(freq456, eps_e456, neff4_a, neff4_b)
+    plot_fig5(freq456, eps_e456, eps2_line456, neff5_0, neff5_b)
+    plot_fig6(freq456, eps_e456, eps2_line456, neff6)
+    plot_fig7(freq78, neff7)
+    plot_fig8(freq78, neff8)
+    plot_fig9(
+        freq7_thz=freq78,
         neff7=neff7,
-        freq8=freq8,
+        freq8_thz=freq78,
+        neff8=neff8,
+        fname="fig9.pdf",
+        xlim_left=(freq78[0], freq78[-1]),
+        xlim_right=(freq78[0], freq78[-1]),
+        title_left=r"Attenuation length ($\mathbf{l}=\mathbf{t}_y$)",
+        title_right=r"Attenuation length ($\mathbf{l}=\mathbf{n}$)",
+    )
+    plot_fig10(
+        freq7=freq78,
+        neff7=neff7,
+        freq8=freq78,
+        neff8=neff8,
+        gamma_lossy=gamma_lossy,
+        eps2_of_omega=eps2_of_omega,
+        fname="fig10.pdf",
+    )
+    plot_fig11(freq7=freq78, eta7=eta7, freq8=freq78, eta8=eta8, fname="fig11.pdf")
+    plot_fig12(
+        freq7=freq78,
+        neff7=neff7,
+        freq8=freq78,
         neff8=neff8,
         gamma_lossy=gamma_lossy,
         eps2_of_omega=eps2_of_omega,
         epsd_of_omega=epsd_of_omega,
         fname="fig12.pdf",
     )
-
-    plot_fig13_group_velocity(
-        freq7=freq7,
-        neff7=neff7,
-        freq8=freq8,
-        neff8=neff8,
-        fname="fig13.pdf",
-    )
+    plot_fig13(freq7=freq78, neff7=neff7, freq8=freq78, neff8=neff8, fname="fig13.pdf")
 
 
 if __name__ == "__main__":
