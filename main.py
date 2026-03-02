@@ -36,7 +36,11 @@ def set_metal_rakic(name: str) -> Tuple[float, float, float]:
 
 
 PLOT_STYLE = ["science", "ieee"]
+PLOT_LINEWIDTH = 2.0
+
 plt.style.use(PLOT_STYLE)
+plt.rcParams["lines.linewidth"] = PLOT_LINEWIDTH
+
 fig_one_panel = (7.0, 4.2)
 fig_two_panel = (7.0, 7.5)
 fig_three_panel = (7.0, 10.5)
