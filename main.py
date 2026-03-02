@@ -35,7 +35,8 @@ def set_metal_rakic(name: str) -> Tuple[float, float, float]:
     return eps_inf, omega_p, gamma
 
 
-plt.style.use(["science"])
+PLOT_STYLE = ["science", "ieee"]
+plt.style.use(PLOT_STYLE)
 fig_one_panel = (7.0, 4.2)
 fig_two_panel = (7.0, 7.5)
 fig_three_panel = (7.0, 10.5)
@@ -262,15 +263,11 @@ def plot_neff_reim(freq_thz, neff, fname, xlim=None, ylim=None, title=None):
     plt.plot(
         freq_thz,
         y_re,
-        "k-",
-        linewidth=3.0,
         label=r"Re($n_{\rm eff}(\nu)$)",
     )
     plt.plot(
         freq_thz,
         y_im,
-        "k--",
-        linewidth=3.0,
         label=r"Im($n_{\rm eff}(\nu)$)",
     )
 
@@ -396,8 +393,8 @@ def solve_neff_curve_real(
 
 def plot_fig2(freq: np.ndarray, eps_o: np.ndarray, eps_e: np.ndarray):
     plt.figure(figsize=fig_one_panel)
-    plt.plot(freq, eps_o, "k-", linewidth=3.0, label=r"$\varepsilon_o(\nu)$")
-    plt.plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
+    plt.plot(freq, eps_o, label=r"$\varepsilon_o(\nu)$")
+    plt.plot(freq, eps_e, label=r"$\varepsilon_e(\nu)$")
     style_ax(
         plt.gca(), xlabel="THz", ylabel=r"$\varepsilon$", xlim=(0, 700), ylim=(-50, 30)
     )
@@ -475,7 +472,7 @@ def solve_neff_fig3(freq: np.ndarray, gamma: float) -> np.ndarray:
 
 def plot_fig3(freq: np.ndarray, neff: np.ndarray):
     plt.figure(figsize=fig_one_panel)
-    plt.plot(freq, neff**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
+    plt.plot(freq, neff**2, label=r"$n_{\rm eff}^2(\nu)$")
     style_ax(
         plt.gca(), xlabel="THz", ylabel=r"$n_{\rm eff}^2$", xlim=(0, 620), ylim=(0, 70)
     )
@@ -494,16 +491,16 @@ def plot_fig4(
 ):
     fig, axs = plt.subplots(2, 1, figsize=fig_two_panel, sharex=True)
 
-    axs[0].plot(freq, neff_a**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
-    axs[0].plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
+    axs[0].plot(freq, neff_a**2, label=r"$n_{\rm eff}^2(\nu)$")
+    axs[0].plot(freq, eps_e, label=r"$\varepsilon_e(\nu)$")
     axs[0].set_title(r"(a) $\kappa=(2\times 10+1)\alpha$", fontsize=16)
     style_ax(
         axs[0], xlabel="THz", ylabel=r"$n_{\rm eff}^2$", xlim=(0, 700), ylim=(0, 70)
     )
     axs[0].legend(loc="upper left", frameon=True, fontsize=14)
 
-    axs[1].plot(freq, neff_b**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
-    axs[1].plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
+    axs[1].plot(freq, neff_b**2, label=r"$n_{\rm eff}^2(\nu)$")
+    axs[1].plot(freq, eps_e, label=r"$\varepsilon_e(\nu)$")
     axs[1].set_title(r"(b) $\kappa=(2\times 100+1)\alpha$", fontsize=16)
     style_ax(
         axs[1], xlabel="THz", ylabel=r"$n_{\rm eff}^2$", xlim=(0, 700), ylim=(0, 70)
@@ -525,18 +522,18 @@ def plot_fig5(
 ):
     fig, axs = plt.subplots(2, 1, figsize=fig_two_panel, sharex=True)
 
-    axs[0].plot(freq, neff0**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
-    axs[0].plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
-    axs[0].plot(freq, eps2_line, "k-.", linewidth=3.0, label=r"$\varepsilon_2$")
+    axs[0].plot(freq, neff0**2, label=r"$n_{\rm eff}^2(\nu)$")
+    axs[0].plot(freq, eps_e, label=r"$\varepsilon_e(\nu)$")
+    axs[0].plot(freq, eps2_line, label=r"$\varepsilon_2$")
     axs[0].set_title(r"(a) $\kappa=0$", fontsize=16)
     style_ax(
         axs[0], xlabel="THz", ylabel=r"$n_{\rm eff}^2$", xlim=(0, 700), ylim=(0, 22)
     )
     axs[0].legend(loc="upper left", frameon=True, fontsize=14)
 
-    axs[1].plot(freq, neffb**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
-    axs[1].plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
-    axs[1].plot(freq, eps2_line, "k-.", linewidth=3.0, label=r"$\varepsilon_2$")
+    axs[1].plot(freq, neffb**2, label=r"$n_{\rm eff}^2(\nu)$")
+    axs[1].plot(freq, eps_e, label=r"$\varepsilon_e(\nu)$")
+    axs[1].plot(freq, eps2_line, label=r"$\varepsilon_2$")
     axs[1].set_title(r"(b) $\kappa=(2\times 100+1)\alpha$", fontsize=16)
     style_ax(
         axs[1], xlabel="THz", ylabel=r"$n_{\rm eff}^2$", xlim=(0, 700), ylim=(0, 22)
@@ -559,9 +556,9 @@ def plot_fig6(
     fig, axs = plt.subplots(3, 1, figsize=fig_three_panel, sharex=True)
 
     for ax, neff, ttl in zip(axs, neffs, titles):
-        ax.plot(freq, neff**2, "k-", linewidth=3.0, label=r"$n_{\rm eff}^2(\nu)$")
-        ax.plot(freq, eps_e, "k--", linewidth=3.0, label=r"$\varepsilon_e(\nu)$")
-        ax.plot(freq, eps2_line, "k-.", linewidth=3.0, label=r"$\varepsilon_2$")
+        ax.plot(freq, neff**2, label=r"$n_{\rm eff}^2(\nu)$")
+        ax.plot(freq, eps_e, label=r"$\varepsilon_e(\nu)$")
+        ax.plot(freq, eps2_line, label=r"$\varepsilon_2$")
         ax.set_title(ttl, fontsize=16)
         style_ax(
             ax, xlabel="THz", ylabel=r"$n_{\rm eff}^2$", xlim=(0, 700), ylim=(0, 22)
@@ -632,7 +629,7 @@ def plot_fig9(
 
     # ---- left: l = t_y ----
     axs[0].plot(
-        freq7_thz, L7, linewidth=3.0, label=r"$L_{\rm att} = 1/(2\,\mathrm{Im}\,\beta)$"
+        freq7_thz, L7, label=r"$L_{\rm att} = 1/(2\,\mathrm{Im}\,\beta)$"
     )
     if title_left is not None:
         axs[0].set_title(title_left, fontsize=18)
@@ -646,7 +643,7 @@ def plot_fig9(
 
     # ---- right: l = n ----
     axs[1].plot(
-        freq8_thz, L8, linewidth=3.0, label=r"$L_{\rm att} = 1/(2\,\mathrm{Im}\,\beta)$"
+        freq8_thz, L8, label=r"$L_{\rm att} = 1/(2\,\mathrm{Im}\,\beta)$"
     )
     if title_right is not None:
         axs[1].set_title(title_right, fontsize=18)
@@ -814,13 +811,13 @@ def plot_fig11(
 ):
     fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
 
-    axs[0].plot(freq7, eta7, "k-", linewidth=3.0)
+    axs[0].plot(freq7, eta7)
     axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
     style_ax(axs[0], xlabel="THz", ylabel=r"$\eta(\nu)$")
     axs[0].set_yscale("log")
     axs[0].set_xlim(float(freq7[0]), float(freq7[-1]))
 
-    axs[1].plot(freq8, eta8, "k-", linewidth=3.0)
+    axs[1].plot(freq8, eta8)
     axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
     style_ax(axs[1], xlabel="THz", ylabel=None)
     axs[1].set_yscale("log")
@@ -902,7 +899,7 @@ def plot_fig10(
         return y
 
     def _plot_depth(ax, freq, depth_nm, title):
-        ax.plot(freq, _clean_float(depth_nm), color="k", linewidth=3.0, label="depth")
+        ax.plot(freq, _clean_float(depth_nm), label="depth")
         ax.set_title(title, fontsize=14)
         ax.legend(loc="upper left", frameon=True, fontsize=10)
 
@@ -910,16 +907,11 @@ def plot_fig10(
         ax.plot(
             freq,
             _clean_real(decay_arr),
-            color="tab:blue",
-            linewidth=2.0,
             label=rf"$\Re({symbol_label})$",
         )
         ax.plot(
             freq,
             _clean_imag(decay_arr),
-            color="tab:orange",
-            linewidth=2.0,
-            linestyle="--",
             label=rf"$\Im({symbol_label})$",
         )
         ax.set_ylabel(r"decay const. (1/m)", fontsize=11)
@@ -1079,12 +1071,12 @@ def plot_fig12(
 
     fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
     for f_thz, sz in curves7:
-        axs[0].plot(x7, sz, linewidth=2.5, label=rf"{f_thz:.0f} THz")
+        axs[0].plot(x7, sz, label=rf"{f_thz:.0f} THz")
     for f_thz, sz in curves8:
-        axs[1].plot(x8, sz, linewidth=2.5, label=rf"{f_thz:.0f} THz")
+        axs[1].plot(x8, sz, label=rf"{f_thz:.0f} THz")
 
-    axs[0].axvline(0.0, color="k", linestyle="--", linewidth=1.2)
-    axs[1].axvline(0.0, color="k", linestyle="--", linewidth=1.2)
+    axs[0].axvline(0.0)
+    axs[1].axvline(0.0)
 
     axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
     axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
@@ -1124,15 +1116,15 @@ def plot_fig13(
 
     fig, axs = plt.subplots(1, 2, figsize=(10.5, 4.2), sharey=True)
 
-    axs[0].plot(freq7, vg7 / c, "k-", linewidth=3.0, label=r"$v_g/c$")
-    axs[0].plot(freq7, ng7, "k--", linewidth=2.5, label=r"$n_g=c/v_g$")
+    axs[0].plot(freq7, vg7 / c, label=r"$v_g/c$")
+    axs[0].plot(freq7, ng7, label=r"$n_g=c/v_g$")
     axs[0].set_title(r"$\mathbf{l}=\mathbf{t}_y$", fontsize=16)
     style_ax(axs[0], xlabel="THz", ylabel=r"$v_g/c$ and $n_g$")
     axs[0].set_xlim(float(freq7[0]), float(freq7[-1]))
     axs[0].legend(loc="best", frameon=True, fontsize=12)
 
-    axs[1].plot(freq8, vg8 / c, "k-", linewidth=3.0, label=r"$v_g/c$")
-    axs[1].plot(freq8, ng8, "k--", linewidth=2.5, label=r"$n_g=c/v_g$")
+    axs[1].plot(freq8, vg8 / c, label=r"$v_g/c$")
+    axs[1].plot(freq8, ng8, label=r"$n_g=c/v_g$")
     axs[1].set_title(r"$\mathbf{l}=\mathbf{n}$", fontsize=16)
     style_ax(axs[1], xlabel="THz", ylabel=None)
     axs[1].set_xlim(float(freq8[0]), float(freq8[-1]))
