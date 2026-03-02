@@ -148,6 +148,39 @@ def csqrt_decay(z: complex) -> complex:
     return w
 
 
+def compute_decay_constants(
+    neff: complex,
+    omega: float,
+    case: str,
+    gamma: float,
+    eps2_fn_omega=None,
+    eps_d_fn_omega=None,
+):
+    """
+    Compute decay constants (q, p1, p2) for the TI/HM interface.
+
+    Returns
+      q, p1, p2, eps_o, eps_e, eps2_loc
+    so callers can reuse both decay constants and local permittivities.
+    """
+    k0 = omega / c
+    eps_o, eps_e = eps_o_e(omega, gamma, eps_d_fn_omega=eps_d_fn_omega)
+    eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(omega)
+
+    q = k0 * csqrt_decay(neff**2 - eps2_loc)
+
+    if case == "ty":
+        p1 = k0 * csqrt_decay(neff**2 - eps_e)
+        p2 = k0 * csqrt_decay(neff**2 - eps_o)
+    elif case == "n":
+        p1 = k0 * csqrt_decay(neff**2 - eps_o)
+        p2 = k0 * csqrt_decay((eps_o / eps_e) * (neff**2 - eps_e))
+    else:
+        raise ValueError("case must be 'ty' or 'n'")
+
+    return q, p1, p2, eps_o, eps_e, eps2_loc
+
+
 def F_disp_complex(
     neff: complex,
     omega: float,
@@ -160,29 +193,22 @@ def F_disp_complex(
     """
     (q+p1)*(q/eps2 + p2/eps_o) + kappa^2*(p2*q)/(eps_o*eps2) = 0
     """
-    k0 = omega / c
-    eps_o, eps_e = eps_o_e(omega, gamma, eps_d_fn_omega=eps_d_fn_omega)
+    q, p1, p2, eps_o, eps_e, eps2_loc = compute_decay_constants(
+        neff,
+        omega,
+        case,
+        gamma,
+        eps2_fn_omega=eps2_fn_omega,
+        eps_d_fn_omega=eps_d_fn_omega,
+    )
 
     if not (np.isfinite(eps_o.real) and np.isfinite(eps_o.imag)):
         return np.nan + 1j * np.nan
     if not (np.isfinite(eps_e.real) and np.isfinite(eps_e.imag)):
         return np.nan + 1j * np.nan
 
-    eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(omega)
-
     if not np.isfinite(eps2_loc.real) or not np.isfinite(eps2_loc.imag):
         return np.nan + 1j * np.nan
-
-    q = k0 * csqrt_decay(neff**2 - eps2_loc)
-
-    if case == "ty":
-        p1 = k0 * csqrt_decay(neff**2 - eps_e)
-        p2 = k0 * csqrt_decay(neff**2 - eps_o)
-    elif case == "n":
-        p1 = k0 * csqrt_decay(neff**2 - eps_o)
-        p2 = k0 * csqrt_decay((eps_o / eps_e) * (neff**2 - eps_e))
-    else:
-        raise ValueError("case must be 'ty' or 'n'")
 
     return (q + p1) * (q / eps2_loc + p2 / eps_o) + (kappa**2) * (p2 * q) / (
         eps_o * eps2_loc
@@ -683,7 +709,6 @@ def compute_penetration_depths(
     If return_decays=True, also returns complex arrays (q_arr, p1_arr, p2_arr).
     """
     omega = 2 * np.pi * (freq_thz * 1e12)
-    k0 = omega / c
 
     d_ti = np.full(freq_thz.shape, np.nan, dtype=float)
     d_p1 = np.full(freq_thz.shape, np.nan, dtype=float)
@@ -698,22 +723,23 @@ def compute_penetration_depths(
         if not (np.isfinite(ne.real) and np.isfinite(ne.imag)):
             continue
 
-        eps_o, eps_e = eps_o_e(om, gamma)
-        eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(om)
+        q, p1, p2, eps_o, eps_e, eps2_loc = compute_decay_constants(
+            ne,
+            om,
+            case,
+            gamma,
+            eps2_fn_omega=eps2_fn_omega,
+        )
 
-        if not (np.isfinite(eps2_loc.real) and np.isfinite(eps2_loc.imag)):
+        if not (
+            np.isfinite(eps_o.real)
+            and np.isfinite(eps_o.imag)
+            and np.isfinite(eps_e.real)
+            and np.isfinite(eps_e.imag)
+            and np.isfinite(eps2_loc.real)
+            and np.isfinite(eps2_loc.imag)
+        ):
             continue
-
-        q = k0[i] * csqrt_decay(ne**2 - eps2_loc)
-
-        if case == "ty":
-            p1 = k0[i] * csqrt_decay(ne**2 - eps_e)
-            p2 = k0[i] * csqrt_decay(ne**2 - eps_o)
-        elif case == "n":
-            p1 = k0[i] * csqrt_decay(ne**2 - eps_o)
-            p2 = k0[i] * csqrt_decay((eps_o / eps_e) * (ne**2 - eps_e))
-        else:
-            raise ValueError("case must be 'ty' or 'n'")
 
         q_arr[i] = q
         p1_arr[i] = p1
@@ -753,13 +779,18 @@ def compute_te_tm_mixing_ratio(
         if not (np.isfinite(ne.real) and np.isfinite(ne.imag)):
             continue
 
-        k0 = om / c
-        beta = k0 * ne
+        beta = (om / c) * ne
         if abs(beta) == 0:
             continue
 
-        eps_o, eps_e = eps_o_e(om, gamma, eps_d_fn_omega=eps_d_fn_omega)
-        eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(om)
+        q, p1, p2, eps_o, eps_e, eps2_loc = compute_decay_constants(
+            ne,
+            om,
+            case,
+            gamma,
+            eps2_fn_omega=eps2_fn_omega,
+            eps_d_fn_omega=eps_d_fn_omega,
+        )
 
         if not (
             np.isfinite(eps_o.real)
@@ -770,16 +801,6 @@ def compute_te_tm_mixing_ratio(
             and np.isfinite(eps2_loc.imag)
         ):
             continue
-
-        q = k0 * csqrt_decay(ne**2 - eps2_loc)
-        if case == "ty":
-            p1 = k0 * csqrt_decay(ne**2 - eps_e)
-            p2 = k0 * csqrt_decay(ne**2 - eps_o)
-        elif case == "n":
-            p1 = k0 * csqrt_decay(ne**2 - eps_o)
-            p2 = k0 * csqrt_decay((eps_o / eps_e) * (ne**2 - eps_e))
-        else:
-            raise ValueError("case must be 'ty' or 'n'")
 
         if np.real(q) <= 0 or np.real(p1) <= 0 or np.real(p2) <= 0:
             continue
@@ -1005,18 +1026,25 @@ def compute_poynting_profile(
     curves = []
     for idx in sample_ids:
         om = 2 * np.pi * freq_thz[idx] * 1e12
-        k0 = om / c
-        beta = k0 * neff[idx]
-        eps_o, eps_e = eps_o_e(om, gamma, eps_d_fn_omega=eps_d_fn_omega)
-        eps2_loc = eps2 if eps2_fn_omega is None else eps2_fn_omega(om)
+        beta = (om / c) * neff[idx]
+        q, _p1, p2, eps_o, eps_e, eps2_loc = compute_decay_constants(
+            neff[idx],
+            om,
+            case,
+            gamma,
+            eps2_fn_omega=eps2_fn_omega,
+            eps_d_fn_omega=eps_d_fn_omega,
+        )
 
-        if case == "ty":
-            p2 = k0 * csqrt_decay(neff[idx] ** 2 - eps_o)
-        elif case == "n":
-            p2 = k0 * csqrt_decay((eps_o / eps_e) * (neff[idx] ** 2 - eps_e))
-        else:
-            raise ValueError("case must be 'ty' or 'n'")
-        q = k0 * csqrt_decay(neff[idx] ** 2 - eps2_loc)
+        if not (
+            np.isfinite(eps_o.real)
+            and np.isfinite(eps_o.imag)
+            and np.isfinite(eps_e.real)
+            and np.isfinite(eps_e.imag)
+            and np.isfinite(eps2_loc.real)
+            and np.isfinite(eps2_loc.imag)
+        ):
+            continue
 
         if np.real(q) <= 0 or np.real(p2) <= 0:
             continue
